@@ -110,6 +110,57 @@
     button:hover {
       background: rgba(168, 216, 234, 0.2);
     }
+
+    .webcam-section {
+      margin-top: 2.5rem;
+      width: 100%;
+      max-width: 680px;
+      text-align: center;
+    }
+
+    .webcam-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #a8d8ea;
+      margin-bottom: 1rem;
+      letter-spacing: 0.04em;
+    }
+
+    .webcam-frame {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+    }
+
+    .webcam-frame iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
+
+    .webcam-links {
+      margin-top: 0.75rem;
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .webcam-links a {
+      font-size: 0.78rem;
+      color: rgba(168, 216, 234, 0.7);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+
+    .webcam-links a:hover {
+      color: #a8d8ea;
+    }
   </style>
 </head>
 <body>
@@ -133,6 +184,26 @@
 
   <div class="updated" id="updated"></div>
   <button onclick="fetchAll()">Obnovit</button>
+
+  <div class="webcam-section">
+    <div class="webcam-title">Webkamera – Klimkovice okolí</div>
+    <div class="webcam-frame">
+      <iframe
+        src="https://webcams.windy.com/webcams/public/embed/player/1483997027/full"
+        allowfullscreen
+        loading="lazy"
+        title="Webkamera Klimkovice – Dálnice D1, Klimkovický tunel"
+      ></iframe>
+    </div>
+    <div class="webcam-links">
+      <a href="https://www.windy.com/webcams/1483997027" target="_blank" rel="noopener">
+        ↗ Plná kamera (Windy)
+      </a>
+      <a href="http://www.klimnet.org/webkamera/weblive_nam.html" target="_blank" rel="noopener">
+        ↗ Náměstí Klimkovice (KlimNet)
+      </a>
+    </div>
+  </div>
 
   <script>
     const WMO_CODES = {
