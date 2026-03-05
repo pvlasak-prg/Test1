@@ -136,11 +136,23 @@
       backdrop-filter: blur(10px);
     }
 
-    .webcam-frame iframe {
+    .webcam-frame img {
       width: 100%;
       height: 100%;
-      border: none;
+      object-fit: cover;
       display: block;
+    }
+
+    .webcam-error {
+      display: none;
+      padding: 2rem;
+      color: rgba(255, 255, 255, 0.45);
+      font-size: 0.9rem;
+    }
+
+    .webcam-error a {
+      color: #a8d8ea;
+      text-decoration: none;
     }
 
     .webcam-links {
@@ -186,19 +198,19 @@
   <button onclick="fetchAll()">Obnovit</button>
 
   <div class="webcam-section">
-    <div class="webcam-title">Webkamera – Klimkovice okolí</div>
+    <div class="webcam-title">Webkamera – Klimkovice, náměstí</div>
     <div class="webcam-frame">
-      <iframe
-        src="https://webcams.windy.com/webcams/public/embed/player/1483997027/full"
-        allowfullscreen
-        loading="lazy"
-        title="Webkamera Klimkovice – Dálnice D1, Klimkovický tunel"
-      ></iframe>
+      <img id="webcam-img"
+        src="http://www.klimnet.org/webkamera/nam.jpg"
+        alt="Webkamera Klimkovice náměstí"
+        onerror="this.style.display='none'; document.getElementById('webcam-error').style.display='block';"
+      />
+      <div class="webcam-error" id="webcam-error">
+        Kamera není dostupná –
+        <a href="http://www.klimnet.org/webkamera/weblive_nam.html" target="_blank" rel="noopener">otevřít přímo →</a>
+      </div>
     </div>
     <div class="webcam-links">
-      <a href="https://www.windy.com/webcams/1483997027" target="_blank" rel="noopener">
-        ↗ Plná kamera (Windy)
-      </a>
       <a href="http://www.klimnet.org/webkamera/weblive_nam.html" target="_blank" rel="noopener">
         ↗ Náměstí Klimkovice (KlimNet)
       </a>
@@ -271,6 +283,13 @@
     }
 
     fetchAll();
+
+    setInterval(function () {
+      const img = document.getElementById('webcam-img');
+      if (img && img.style.display !== 'none') {
+        img.src = 'http://www.klimnet.org/webkamera/nam.jpg?t=' + Date.now();
+      }
+    }, 60000);
   </script>
 
 </body>
