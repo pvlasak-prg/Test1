@@ -111,6 +111,11 @@
       background: rgba(168, 216, 234, 0.2);
     }
 
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     .webcam-section {
       margin-top: 2.5rem;
       width: 100%;
@@ -173,6 +178,93 @@
     .webcam-links a:hover {
       color: #a8d8ea;
     }
+
+    /* --- Car counter --- */
+    .car-section {
+      margin-top: 1.25rem;
+      width: 100%;
+      max-width: 680px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 14px;
+      padding: 1.25rem 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .car-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .car-label {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .car-count {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #a8d8ea;
+      min-width: 2.5rem;
+      text-align: center;
+    }
+
+    .car-count.analyzing {
+      font-size: 0.9rem;
+      font-style: italic;
+      color: rgba(255, 255, 255, 0.45);
+    }
+
+    .car-meta {
+      font-size: 0.72rem;
+      color: rgba(255, 255, 255, 0.35);
+      margin-top: 0.4rem;
+      text-align: left;
+    }
+
+    .api-key-row {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .api-key-row label {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.4);
+      white-space: nowrap;
+    }
+
+    .api-key-row input {
+      flex: 1;
+      min-width: 0;
+      padding: 0.35rem 0.7rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.07);
+      color: #fff;
+      font-size: 0.78rem;
+      font-family: monospace;
+      outline: none;
+    }
+
+    .api-key-row input::placeholder {
+      color: rgba(255, 255, 255, 0.25);
+    }
+
+    .api-key-row input:focus {
+      border-color: rgba(168, 216, 234, 0.5);
+    }
+
+    #btn-analyze {
+      margin-top: 0;
+      padding: 0.4rem 1rem;
+      font-size: 0.8rem;
+    }
   </style>
 </head>
 <body>
@@ -214,6 +306,22 @@
       <a href="http://www.klimnet.org/webkamera/weblive_nam.html" target="_blank" rel="noopener">
         ↗ Náměstí Klimkovice (KlimNet)
       </a>
+    </div>
+  </div>
+
+  <!-- Car counter -->
+  <div class="car-section">
+    <div class="car-row">
+      <div>
+        <div class="car-label">Osobní auta na náměstí</div>
+        <div class="car-meta" id="car-meta"></div>
+      </div>
+      <div class="car-count" id="car-count">–</div>
+      <button id="btn-analyze" onclick="analyzeWebcam()">Analyzovat</button>
+    </div>
+    <div class="api-key-row">
+      <label for="api-key-input">Anthropic API klíč:</label>
+      <input id="api-key-input" type="password" placeholder="sk-ant-…" autocomplete="off" />
     </div>
   </div>
 
@@ -290,6 +398,92 @@
         img.src = 'http://www.klimnet.org/webkamera/nam.jpg?t=' + Date.now();
       }
     }, 60000);
+
+    // --- Persist API key in localStorage ---
+    const apiKeyInput = document.getElementById('api-key-input');
+    apiKeyInput.value = localStorage.getItem('anthropic_key') || '';
+    apiKeyInput.addEventListener('change', () => {
+      localStorage.setItem('anthropic_key', apiKeyInput.value.trim());
+    });
+
+    async function analyzeWebcam() {
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        alert('Zadej Anthropic API klíč.');
+        apiKeyInput.focus();
+        return;
+      }
+
+      const countEl = document.getElementById('car-count');
+      const metaEl  = document.getElementById('car-meta');
+      const btn     = document.getElementById('btn-analyze');
+
+      countEl.textContent = 'analyzuji…';
+      countEl.className = 'car-count analyzing';
+      metaEl.textContent = '';
+      btn.disabled = true;
+
+      try {
+        // Fetch webcam image via CORS proxy and convert to base64
+        const webcamUrl = 'http://www.klimnet.org/webkamera/nam.jpg?t=' + Date.now();
+        const proxyUrl  = 'https://corsproxy.io/?' + encodeURIComponent(webcamUrl);
+        const imgRes    = await fetch(proxyUrl);
+        if (!imgRes.ok) throw new Error('Nepodařilo se načíst snímek z kamery.');
+        const blob      = await imgRes.blob();
+        const base64    = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload  = () => resolve(reader.result.split(',')[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        // Call Claude API
+        const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-allow-browser': 'true',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 64,
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: blob.type || 'image/jpeg', data: base64 },
+                },
+                {
+                  type: 'text',
+                  text: 'Kolik osobních automobilů vidíš na tomto snímku z webkamery? Odpověz pouze jedním číslem – bez textu, bez vysvětlení.',
+                },
+              ],
+            }],
+          }),
+        });
+
+        if (!apiRes.ok) {
+          const err = await apiRes.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `API chyba ${apiRes.status}`);
+        }
+
+        const data   = await apiRes.json();
+        const answer = data.content?.[0]?.text?.trim() ?? '?';
+
+        countEl.textContent = answer;
+        countEl.className   = 'car-count';
+        metaEl.textContent  = 'Naposledy: ' + new Date().toLocaleTimeString('cs-CZ');
+      } catch (e) {
+        countEl.textContent = '!';
+        countEl.className   = 'car-count error';
+        metaEl.textContent  = e.message;
+      } finally {
+        btn.disabled = false;
+      }
+    }
   </script>
 
 </body>
