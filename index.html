@@ -418,31 +418,6 @@
       localStorage.setItem('anthropic_key', apiKeyInput.value.trim());
     });
 
-    async function fetchImageBase64(webcamUrl) {
-      const proxies = [
-        'https://corsproxy.io/?' + encodeURIComponent(webcamUrl),
-        'https://api.allorigins.win/raw?url=' + encodeURIComponent(webcamUrl),
-      ];
-      let lastErr;
-      for (const url of proxies) {
-        try {
-          const res = await fetch(url);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          const blob = await res.blob();
-          const base64 = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload  = () => resolve({ data: reader.result.split(',')[1], type: blob.type || 'image/jpeg' });
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-          });
-          return base64;
-        } catch (e) {
-          lastErr = e;
-        }
-      }
-      throw new Error('Snímek z kamery se nepodařilo načíst: ' + lastErr.message);
-    }
-
     async function analyzeWebcam() {
       const apiKey = apiKeyInput.value.trim();
       if (!apiKey) {
@@ -463,8 +438,8 @@
       btn.disabled = true;
 
       try {
+        // Anthropic servers fetch the image directly – no CORS proxy needed
         const webcamUrl = 'http://www.klimnet.org/webkamera/nam.jpg?t=' + Date.now();
-        const { data: base64, type: mimeType } = await fetchImageBase64(webcamUrl);
 
         const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -482,7 +457,7 @@
               content: [
                 {
                   type: 'image',
-                  source: { type: 'base64', media_type: mimeType, data: base64 },
+                  source: { type: 'url', url: webcamUrl },
                 },
                 {
                   type: 'text',
