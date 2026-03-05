@@ -219,10 +219,21 @@
     }
 
     .car-meta {
-      font-size: 0.72rem;
-      color: rgba(255, 255, 255, 0.35);
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.45);
       margin-top: 0.4rem;
       text-align: left;
+    }
+
+    .car-error {
+      margin-top: 0.75rem;
+      padding: 0.5rem 0.75rem;
+      background: rgba(255, 107, 107, 0.15);
+      border: 1px solid rgba(255, 107, 107, 0.4);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      color: #ff9999;
+      display: none;
     }
 
     .api-key-row {
@@ -323,6 +334,7 @@
       <label for="api-key-input">Anthropic API klíč:</label>
       <input id="api-key-input" type="password" placeholder="sk-ant-…" autocomplete="off" />
     </div>
+    <div class="car-error" id="car-error"></div>
   </div>
 
   <script>
@@ -406,6 +418,31 @@
       localStorage.setItem('anthropic_key', apiKeyInput.value.trim());
     });
 
+    async function fetchImageBase64(webcamUrl) {
+      const proxies = [
+        'https://corsproxy.io/?' + encodeURIComponent(webcamUrl),
+        'https://api.allorigins.win/raw?url=' + encodeURIComponent(webcamUrl),
+      ];
+      let lastErr;
+      for (const url of proxies) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const blob = await res.blob();
+          const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve({ data: reader.result.split(',')[1], type: blob.type || 'image/jpeg' });
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+          return base64;
+        } catch (e) {
+          lastErr = e;
+        }
+      }
+      throw new Error('Snímek z kamery se nepodařilo načíst: ' + lastErr.message);
+    }
+
     async function analyzeWebcam() {
       const apiKey = apiKeyInput.value.trim();
       if (!apiKey) {
@@ -416,28 +453,19 @@
 
       const countEl = document.getElementById('car-count');
       const metaEl  = document.getElementById('car-meta');
+      const errEl   = document.getElementById('car-error');
       const btn     = document.getElementById('btn-analyze');
 
       countEl.textContent = 'analyzuji…';
       countEl.className = 'car-count analyzing';
       metaEl.textContent = '';
+      errEl.style.display = 'none';
       btn.disabled = true;
 
       try {
-        // Fetch webcam image via CORS proxy and convert to base64
         const webcamUrl = 'http://www.klimnet.org/webkamera/nam.jpg?t=' + Date.now();
-        const proxyUrl  = 'https://corsproxy.io/?' + encodeURIComponent(webcamUrl);
-        const imgRes    = await fetch(proxyUrl);
-        if (!imgRes.ok) throw new Error('Nepodařilo se načíst snímek z kamery.');
-        const blob      = await imgRes.blob();
-        const base64    = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload  = () => resolve(reader.result.split(',')[1]);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
+        const { data: base64, type: mimeType } = await fetchImageBase64(webcamUrl);
 
-        // Call Claude API
         const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: {
@@ -454,7 +482,7 @@
               content: [
                 {
                   type: 'image',
-                  source: { type: 'base64', media_type: blob.type || 'image/jpeg', data: base64 },
+                  source: { type: 'base64', media_type: mimeType, data: base64 },
                 },
                 {
                   type: 'text',
@@ -467,7 +495,8 @@
 
         if (!apiRes.ok) {
           const err = await apiRes.json().catch(() => ({}));
-          throw new Error(err?.error?.message || `API chyba ${apiRes.status}`);
+          const msg = err?.error?.message || `HTTP ${apiRes.status}`;
+          throw new Error(`Chyba Anthropic API: ${msg}`);
         }
 
         const data   = await apiRes.json();
@@ -477,9 +506,10 @@
         countEl.className   = 'car-count';
         metaEl.textContent  = 'Naposledy: ' + new Date().toLocaleTimeString('cs-CZ');
       } catch (e) {
-        countEl.textContent = '!';
-        countEl.className   = 'car-count error';
-        metaEl.textContent  = e.message;
+        countEl.textContent = '–';
+        countEl.className   = 'car-count';
+        errEl.textContent   = e.message;
+        errEl.style.display = 'block';
       } finally {
         btn.disabled = false;
       }
