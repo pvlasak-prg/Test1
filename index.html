@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aktuální počasí</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: #fff;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: 1.6rem;
+      margin-bottom: 2rem;
+      letter-spacing: 0.05em;
+      color: #a8d8ea;
+      text-align: center;
+    }
+
+    .cards {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 2rem 2.5rem;
+      text-align: center;
+      min-width: 200px;
+      backdrop-filter: blur(10px);
+      transition: transform 0.2s;
+    }
+
+    .card:hover {
+      transform: translateY(-4px);
+    }
+
+    .city {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #a8d8ea;
+      margin-bottom: 0.5rem;
+    }
+
+    .temp {
+      font-size: 3.5rem;
+      font-weight: 700;
+      line-height: 1;
+      margin: 0.5rem 0;
+    }
+
+    .feels {
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 0.4rem;
+    }
+
+    .weather-desc {
+      font-size: 0.9rem;
+      color: rgba(255, 255, 255, 0.75);
+      margin-top: 0.6rem;
+    }
+
+    .loading {
+      color: rgba(255, 255, 255, 0.5);
+      font-style: italic;
+    }
+
+    .error {
+      color: #ff6b6b;
+    }
+
+    .updated {
+      margin-top: 2rem;
+      font-size: 0.78rem;
+      color: rgba(255, 255, 255, 0.4);
+      text-align: center;
+    }
+
+    button {
+      margin-top: 1.5rem;
+      padding: 0.5rem 1.4rem;
+      border: 1px solid rgba(168, 216, 234, 0.4);
+      border-radius: 8px;
+      background: rgba(168, 216, 234, 0.1);
+      color: #a8d8ea;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: rgba(168, 216, 234, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Aktuální teplota</h1>
+
+  <div class="cards" id="cards">
+    <div class="card" id="card-prague">
+      <div class="city">Praha</div>
+      <div class="temp loading" id="temp-prague">…</div>
+      <div class="feels" id="feels-prague"></div>
+      <div class="weather-desc" id="desc-prague"></div>
+    </div>
+    <div class="card" id="card-klimkovice">
+      <div class="city">Klimkovice</div>
+      <div class="temp loading" id="temp-klimkovice">…</div>
+      <div class="feels" id="feels-klimkovice"></div>
+      <div class="weather-desc" id="desc-klimkovice"></div>
+    </div>
+  </div>
+
+  <div class="updated" id="updated"></div>
+  <button onclick="fetchAll()">Obnovit</button>
+
+  <script>
+    const WMO_CODES = {
+      0: 'Jasno',
+      1: 'Převážně jasno', 2: 'Polojasno', 3: 'Zataženo',
+      45: 'Mlha', 48: 'Námraza',
+      51: 'Slabé mrholení', 53: 'Mrholení', 55: 'Silné mrholení',
+      61: 'Slabý déšť', 63: 'Déšť', 65: 'Silný déšť',
+      71: 'Slabé sněžení', 73: 'Sněžení', 75: 'Silné sněžení',
+      77: 'Sněhové krupky',
+      80: 'Přeháňky', 81: 'Silné přeháňky', 82: 'Velmi silné přeháňky',
+      85: 'Sněhové přeháňky', 86: 'Silné sněhové přeháňky',
+      95: 'Bouřka', 96: 'Bouřka s krupobitím', 99: 'Bouřka s velkým krupobitím',
+    };
+
+    const LOCATIONS = [
+      { id: 'prague',     lat: 50.0755, lon: 14.4378 },
+      { id: 'klimkovice', lat: 49.7897, lon: 18.1247 },
+    ];
+
+    async function fetchWeather(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        `&current=temperature_2m,apparent_temperature,weathercode` +
+        `&timezone=Europe%2FPrague`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }
+
+    async function fetchAll() {
+      document.getElementById('updated').textContent = '';
+      for (const loc of LOCATIONS) {
+        document.getElementById('temp-' + loc.id).textContent = '…';
+        document.getElementById('temp-' + loc.id).className = 'temp loading';
+        document.getElementById('feels-' + loc.id).textContent = '';
+        document.getElementById('desc-' + loc.id).textContent = '';
+      }
+
+      await Promise.all(LOCATIONS.map(async (loc) => {
+        try {
+          const data = await fetchWeather(loc.lat, loc.lon);
+          const cur = data.current;
+          const temp = Math.round(cur.temperature_2m);
+          const feels = Math.round(cur.apparent_temperature);
+          const code = cur.weathercode;
+
+          const tempEl = document.getElementById('temp-' + loc.id);
+          tempEl.textContent = temp + ' °C';
+          tempEl.className = 'temp';
+
+          document.getElementById('feels-' + loc.id).textContent =
+            `Pocitová teplota: ${feels} °C`;
+
+          document.getElementById('desc-' + loc.id).textContent =
+            WMO_CODES[code] ?? 'Neznámý stav';
+        } catch (e) {
+          const tempEl = document.getElementById('temp-' + loc.id);
+          tempEl.textContent = 'Chyba';
+          tempEl.className = 'temp error';
+        }
+      }));
+
+      const now = new Date().toLocaleString('cs-CZ');
+      document.getElementById('updated').textContent = `Aktualizováno: ${now}`;
+    }
+
+    fetchAll();
+  </script>
+
+</body>
+</html>
